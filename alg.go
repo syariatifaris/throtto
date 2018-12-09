@@ -2,6 +2,7 @@ package throtto
 
 import (
 	"errors"
+	"fmt"
 	"log"
 	"math"
 	"net/http"
@@ -20,7 +21,7 @@ type lcap struct {
 }
 
 type lcount struct {
-	count, scount, fcount, dcount int64
+	count, pcount, scount, fcount, dcount int64
 	sync.Mutex
 }
 
@@ -131,6 +132,7 @@ func (l *limiter) tcount(status string) int64 {
 func (l *limiter) rcounter() {
 	l.lcount.Lock()
 	defer l.lcount.Unlock()
+	l.lcount.pcount = l.lcount.count
 	l.lcount.count = 0
 	l.lcount.dcount = 0
 	l.lcount.scount = 0
@@ -171,12 +173,15 @@ func (l *limiter) wupdate(status string) {
 		if l.lcap.window < l.lstate.lwindow && !l.lstate.isDrop {
 			l.lmem.Lock()
 			defer l.lmem.Unlock()
-			l.lmem.wdrop = append(l.lmem.wdrop, l.lstate.lwindow)
+			l.lcount.Lock()
+			defer l.lcount.Unlock()
+			l.lmem.wdrop = append(l.lmem.wdrop, float64(l.lcount.pcount))
 			var total float64
 			for _, v := range l.lmem.wdrop {
 				total += v
 			}
 			l.lcap.thres = total / float64(len(l.lmem.wdrop))
+			l.debugln(fmt.Sprint("new threshold", l.lcap.thres))
 			l.lstate.isDrop = true
 		}
 	}
