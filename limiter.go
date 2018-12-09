@@ -25,7 +25,7 @@ func New(cfg *Config) RequestLimitter {
 				window: float64(cfg.CapConfidence),
 			},
 			lmem: &lmem{
-				wdrop: []float64{float64(cfg.CapConfidence)},
+				wdrop: []float64{float64(cfg.CapConfidence * 2)},
 			},
 			lstate: new(lstate),
 			ltask: &ltask{
