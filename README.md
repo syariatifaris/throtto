@@ -21,3 +21,8 @@ r.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 })
 http.ListenAndServe(":8000", limiter.ProtectOverRequest(r))
 ```
+
+## Contributor
+
+1. @fgarnadi
+2. @syariatifaris
