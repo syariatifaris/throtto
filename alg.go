@@ -132,7 +132,7 @@ func (l *limiter) tcount(status string) int64 {
 func (l *limiter) rcounter() {
 	l.lcount.Lock()
 	defer l.lcount.Unlock()
-	l.lcount.pcount = l.lcount.count
+	l.lcount.pcount = (l.lcount.pcount + l.lcount.count) / 2
 	l.lcount.count = 0
 	l.lcount.dcount = 0
 	l.lcount.scount = 0
