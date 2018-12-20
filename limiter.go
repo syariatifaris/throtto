@@ -23,6 +23,7 @@ func New(cfg *Config) RequestLimitter {
 			lcap: &lcap{
 				thres:  float64(2 * cfg.CapConfidence),
 				window: float64(cfg.CapConfidence),
+				conf:   float64(cfg.CapConfidence),
 			},
 			lmem: &lmem{
 				wdrop: []float64{float64(cfg.CapConfidence * 2)},
@@ -74,7 +75,6 @@ type Config struct {
 //ProtectOverRequest protect handler from exceeding request
 func (l *limiter) ProtectOverRequest(next http.Handler) http.Handler {
 	go l.ptick()
-	go l.pschedule()
 	return limitHandler(l, next)
 }
 

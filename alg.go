@@ -1,7 +1,6 @@
 package throtto
 
 import (
-	"errors"
 	"fmt"
 	"log"
 	"math"
@@ -16,7 +15,7 @@ type lweight struct {
 }
 
 type lcap struct {
-	window, thres float64
+	window, thres, conf float64
 	sync.Mutex
 }
 
@@ -37,8 +36,41 @@ type lmem struct {
 }
 
 type ltask struct {
-	tasks []string
+	tasks  []string
+	start  *rstatus
+	end    *rstatus
+	length int
+	gr     int
 	sync.Mutex
+}
+
+type rstatus struct {
+	value string
+	next  *rstatus
+}
+
+func (t *ltask) push(ts *rstatus) {
+	if t.start == nil {
+		t.start = ts
+		t.end = ts
+	} else {
+		lp := t.end
+		lp.next = ts
+		t.end = ts
+	}
+	t.length++
+}
+
+func (t *ltask) pop() {
+	t.Lock()
+	defer t.Unlock()
+	if t.start != nil {
+		curr := t.start
+		t.start = curr.next
+		curr = nil
+		t.length--
+	}
+	t.length = 0
 }
 
 type cctrl struct {
@@ -87,6 +119,12 @@ func (l *limiter) pschedule() {
 	}
 }
 
+func (l *limiter) calc(stat string) {
+	l.add(stat)
+	l.wupdate(stat)
+	l.balance(stat)
+}
+
 func (l *limiter) allow() bool {
 	l.lcount.Lock()
 	l.lcap.Lock()
@@ -98,11 +136,25 @@ func (l *limiter) allow() bool {
 func (l *limiter) next(code int) error {
 	l.ltask.Lock()
 	defer l.ltask.Unlock()
-	if len(l.ltask.tasks) > MaxTask {
-		return errors.New("task buffer exceeded")
+	l.ltask.push(&rstatus{value: getStatus(code)})
+	if l.ltask.length == 1 && l.ltask.gr == 0 {
+		l.ltask.gr++
+		go l.process()
 	}
-	l.ltask.tasks = append(l.ltask.tasks, getStatus(code))
 	return nil
+}
+
+func (l *limiter) process() {
+	if l.ltask.start != nil {
+		curr := l.ltask.start
+		for curr != nil {
+			l.calc(curr.value)
+			curr = curr.next
+			l.ltask.start = curr
+			l.ltask.pop()
+		}
+	}
+	l.ltask.gr--
 }
 
 func (l *limiter) add(status string) {
@@ -158,7 +210,9 @@ func (l *limiter) wupdate(status string) {
 			l.lweight.fw = 1 - l.cctrl.flux
 			l.lstate.isDrop = false
 		}
-		if l.lcap.window < l.lcap.thres {
+		if l.lcap.window < float64(l.lcap.conf) {
+			nw = l.quick()
+		} else if l.lcap.window < l.lcap.thres {
 			nw = l.slow()
 		} else {
 			nw = l.congavd()
@@ -207,6 +261,10 @@ func (l *limiter) balance(nstat string) {
 		l.lweight.sw -= l.cctrl.flux
 		return
 	}
+}
+
+func (l *limiter) quick() float64 {
+	return l.lcap.window + l.cctrl.sincr
 }
 
 func (l *limiter) slow() float64 {
