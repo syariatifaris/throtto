@@ -1,7 +1,6 @@
 package throtto
 
 import (
-	//"errors"
 	"fmt"
 	"log"
 	"math"
@@ -48,11 +47,6 @@ type ltask struct {
 type rstatus struct {
 	value string
 	next  *rstatus
-}
-
-type gr struct {
-	count int
-	sync.Mutex
 }
 
 func (t *ltask) push(ts *rstatus) {
