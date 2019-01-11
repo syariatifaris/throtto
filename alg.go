@@ -75,7 +75,7 @@ func (l *limiter) pschedule() {
 			return
 		default:
 			l.ltask.Lock()
-			if len(l.ltask.tasks) > 0 {
+			if len(l.ltask.tasks) > 1 {
 				stat, ntask := l.ltask.tasks[0], l.ltask.tasks[1:]
 				l.ltask.tasks = ntask
 				l.add(stat)
@@ -90,8 +90,10 @@ func (l *limiter) pschedule() {
 func (l *limiter) allow() bool {
 	l.lcount.Lock()
 	l.lcap.Lock()
-	defer l.lcount.Unlock()
-	defer l.lcap.Unlock()
+	defer func() {
+		l.lcount.Unlock()
+		l.lcap.Unlock()
+	}()
 	return l.lcount.count < int64(math.Ceil(l.lcap.window))
 }
 
@@ -141,11 +143,13 @@ func (l *limiter) rcounter() {
 
 func (l *limiter) wupdate(status string) {
 	l.lcap.Lock()
-	defer l.lcap.Unlock()
 	l.lweight.Lock()
-	defer l.lweight.Unlock()
 	l.lstate.Lock()
-	defer l.lstate.Unlock()
+	defer func() {
+		l.lcap.Unlock()
+		l.lweight.Unlock()
+		l.lstate.Unlock()
+	}()
 	var nw float64
 	var isDrop bool
 	switch status {
@@ -172,9 +176,11 @@ func (l *limiter) wupdate(status string) {
 	if isDrop {
 		if l.lcap.window < l.lstate.lwindow && !l.lstate.isDrop {
 			l.lmem.Lock()
-			defer l.lmem.Unlock()
 			l.lcount.Lock()
-			defer l.lcount.Unlock()
+			defer func() {
+				l.lmem.Unlock()
+				l.lcount.Unlock()
+			}()
 			l.lmem.wdrop = append(l.lmem.wdrop, float64(l.lcount.pcount))
 			var total float64
 			for _, v := range l.lmem.wdrop {
